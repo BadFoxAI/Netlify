@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emergency Map with Rich Popups</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body, #map { height: 100%; margin: 0; padding: 0; }
+    .popup-content { max-width: 300px; }
+    .popup-content h3 { margin: 0 0 5px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Initialize the map centered on the U.S.
+    var map = L.map('map').setView([37.8, -96], 4);
+
+    // Base layer from OpenStreetMap
+    var baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Function to create a marker with a rich popup for emergency info
+    function addEmergencyMarker(lat, lng, title, videoURL, details) {
+      var popupContent = `
+        <div class="popup-content">
+          <h3>${title}</h3>
+          <iframe width="280" height="157" src="${videoURL}" frameborder="0" allowfullscreen></iframe>
+          <p>${details}</p>
+        </div>
+      `;
+      var marker = L.marker([lat, lng]).addTo(map);
+      marker.bindPopup(popupContent);
+      
+      // Optional: Open popup on hover instead of click
+      marker.on('mouseover', function(e) { this.openPopup(); });
+      marker.on('mouseout', function(e) { this.closePopup(); });
+    }
+
+    // Example usage: An emergency marker with a video
+    addEmergencyMarker(
+      39.0997, -94.5786, 
+      "Emergency Alert: Tornado Warning", 
+      "https://www.youtube.com/embed/dQw4w9WgXcQ",  // Replace with your video URL
+      "A severe tornado warning is in effect for the area. Follow safety instructions and stay indoors until the alert is lifted."
+    );
+
+    // You can add more markers or layers as needed for the full map
+  </script>
+</body>
+</html>
