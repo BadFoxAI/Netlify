@@ -226,7 +226,8 @@ function zoom(factor, pivotX, pivotY) {
 }
 
 function updatePanningInput() {
-    let dx = 0; dy = 0;
+    let dx = 0;
+    let dy = 0; // <<< --- THE FIX IS HERE --- >>>
     const panAmount = config.PAN_SPEED_FACTOR * config.BASE_GRID_SIZE;
     if (keys['ArrowLeft'] || keys['KeyA']) dx -= panAmount;
     if (keys['ArrowRight'] || keys['KeyD']) dx += panAmount;
