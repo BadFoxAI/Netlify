@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SimEmoji - Layers & Slider</title>
+    <title>SimEmoji - v8 Fixed</title>
     <style>
-        /* CSS - Minor adjustments might be needed for slider/layer controls */
+        /* CSS */
         body { margin: 0; overflow: hidden; background-color: #222; display: flex; font-family: sans-serif; }
         #canvasContainer { flex-grow: 1; position: relative; overflow: hidden; }
         canvas { display: block; background-color: #5a8b5a; cursor: crosshair; image-rendering: pixelated; }
@@ -30,13 +30,13 @@
 
         /* Slider Styles */
         .slider-group { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-        .slider-group label { font-size: 0.9em; margin-right: 5px; }
-        .slider-group input[type="range"] { flex-grow: 1; margin: 0 5px; cursor: pointer; }
+        .slider-group label { font-size: 0.9em; margin-right: 5px; flex-shrink: 0; }
+        .slider-group input[type="range"] { flex-grow: 1; margin: 0 5px; cursor: pointer; max-width: 100px;}
         .slider-group span { font-size: 0.9em; min-width: 30px; text-align: right; }
 
 
-        #selectedTileDisplay { font-size: 24px; margin-left: 5px; vertical-align: middle; }
-        #coordsDisplay { font-size: 0.8em; color: #aaa; margin-top: 5px; text-align: center; }
+        #selectedTileDisplay { font-size: 24px; margin-left: 5px; vertical-align: middle; line-height: 1; }
+        #coordsDisplay { font-size: 0.8em; color: #aaa; margin-top: 5px; text-align: center; height: 1.1em; }
         #saveStatus { font-size: 0.8em; color: #8f8; height: 1.2em; margin-top: 4px; text-align: center; }
 
         #clearConfirm { display: none; font-size: 0.85em; background-color: #444; padding: 5px; border-radius: 3px; margin-top: 5px; text-align: center; }
@@ -46,11 +46,12 @@
         #palette .tile-category { margin-bottom: 10px; border-bottom: 1px dashed #555; padding-bottom: 5px; }
         #palette .tile-category h3 { margin: 0 0 3px 0; font-size: 0.9em; color: #bbb; }
         #palette span {
-            display: inline-block; font-size: 22px; padding: 2px; margin: 1px;
+            display: inline-block; font-size: 22px; padding: 0; /* Remove padding if using background */ margin: 1px;
             cursor: pointer; border-radius: 3px; border: 1px solid transparent;
-            user-select: none; width: 28px; text-align: center; line-height: 1.2;
+            user-select: none; width: 28px; height: 28px; /* Ensure square for background */ text-align: center; line-height: 28px; /* Vertically center emoji */
+            vertical-align: middle; background-color: #444; /* BG for generated preview */
         }
-        #palette span:hover { background-color: #555; }
+        #palette span:hover { background-color: #555; border-color: #888; }
         #palette span.selected-tile { border: 1px solid #ffff00; background-color: rgba(255, 255, 0, 0.2); }
 
         #fileInput { display: none; }
@@ -63,7 +64,7 @@
             <div class="button-group">
                  <button id="buildToolBtn" title="Build Tool (B)">🖌️</button>
                  <button id="bulldozeToolBtn" title="Bulldoze Tool (X)">🚫</button>
-                 <span style="flex-grow: 0;"> | <span id="selectedTileDisplay">❓</span></span>
+                 <span id="selectedTileDisplay" style="flex-grow: 0; padding-left: 5px;">❓</span>
             </div>
              <!-- Size Slider -->
              <div class="slider-group">
@@ -73,10 +74,10 @@
              </div>
              <!-- Layer Controls -->
               <div class="button-group">
-                 <label style="font-size:0.9em">Layer:</label>
-                 <button id="layerDownBtn" title="Decrease Layer (<)">◀</button>
-                 <span id="layerDisplay" style="min-width: 20px; font-size: 0.9em; text-align:center;">1</span>
-                 <button id="layerUpBtn" title="Increase Layer (>)">▶</button>
+                 <label style="font-size:0.9em; margin-right: 5px; flex-shrink: 0;">Layer:</label>
+                 <button id="layerDownBtn" title="Decrease Layer (<)" style="flex-grow: 0;">◀</button>
+                 <span id="layerDisplay" class="control-button" style="min-width: 25px; flex-grow: 0; font-size: 0.9em; padding: 5px 0;" title="Click to toggle isolation">1</span>
+                 <button id="layerUpBtn" title="Increase Layer (>)" style="flex-grow: 0;">▶</button>
              </div>
              <div class="button-group">
                  <button id="undoBtn" title="Undo (Ctrl+Z)">↩️</button>
@@ -89,7 +90,7 @@
              <div class="button-group">
                  <button id="saveFileBtn" title="Save to File">💾</button>
                  <button id="loadFileBtn" title="Load from File">📂</button>
-                 <span id="clearSaveBtn" class="danger control-button" title="Clear Local Save">❌</span> <!-- Added control-button class -->
+                 <span id="clearSaveBtn" class="danger control-button" title="Clear Local Save">❌</span>
              </div>
               <div id="clearConfirm">
                  Are you sure?
@@ -101,6 +102,7 @@
         </div>
 
         <div id="palette">
+            <!-- Palette content generated by ui.js -->
             <h2>Palette</h2>
         </div>
     </div>
@@ -111,6 +113,7 @@
 
     <!-- Load Scripts as Modules -->
     <script type="module" src="config.js"></script>
+    <script type="module" src="drawingUtils.js"></script> <!-- Load drawing utils first -->
     <script type="module" src="state.js"></script>
     <script type="module" src="ui.js"></script>
     <script type="module" src="simemoji.js"></script>
