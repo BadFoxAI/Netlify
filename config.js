@@ -24,13 +24,13 @@ export const MAX_LAYER = LAYER_AIR;
 // --- Generated Tile Definitions ---
 export const GENERATED_TILES = {
     'T_GRASS': { type: 'noise', color1: '#5a8b5a', color2: '#6aaa6a', density: 0.3 },
-    'T_WATER_BASE': { type: 'color', color: '#699cc0' },
+    'T_WATER_BASE': { type: 'color', color: '#699cc0' }, // Flat water color for base layer
     'T_DIRT':  { type: 'noise', color1: '#a07040', color2: '#8a6035', density: 0.2 },
-    'T_ROCK_BASE':  { type: 'color', color: '#888888'},
+    'T_ROCK_BASE':  { type: 'color', color: '#888888'}, // Flat rock base color
     'T_SAND':  { type: 'noise', color1: '#e0d0a0', color2: '#d4c090', density: 0.25 },
     'T_ASPHALT': { type: 'color', color: '#555555' },
-    'T_RAIL': { type: 'pattern', color1: '#8a6035', color2: '#707070', pattern: 'rail' },
-    'T_BRICK_PATH': { type: 'pattern', color1: '#c08070', color2: '#a06050', pattern: 'bricks' }
+    'T_RAIL': { type: 'pattern', color1: '#8a6035', color2: '#707070', pattern: 'rail' }, // Example Rail
+    'T_BRICK_PATH': { type: 'pattern', color1: '#c08070', color2: '#a06050', pattern: 'bricks' } // Example Bricks
 };
 export const GENERATED_TILE_IDS = new Set(Object.keys(GENERATED_TILES));
 
@@ -50,7 +50,7 @@ export const TILE_CATEGORIES = {
     "Industrial": ['🏭', '🔧', '⚙️', '🧱', '🪵', '⛏️', '🏗️'], // Brick wall is industrial/feature
     "Civic/Services": ['🏛️','🏫','🏥','🏤','⛪','🕌','🕍','⛩️','🏰','🏯','🏟️','🚓','🚑','🚒','⛽','💡','♻️','🛰️'],
     "Vehicles":   ['🚗', '🚕', '🚌', '🚚', '🚛', '🚢', '🚤', '✈️', '🚁', '🚀'], // Separated vehicles
-    "Infrastructure": ['🚧','🚦','🌉','⚓'],
+    "Infrastructure": ['🚧','🚦','🌉','⚓'], // Things often on/near paths/water
     "Recreation": ['🎡','🎢','🎪','🎭','🏞️','🏕️','🏖️','⛱️','⛲','⛳','⚽','🏀','🏈','⚾','🎾','🎳','🎣','🏊','🏄'],
     "Farm":       ['🍓', '🍎', '🌽', '🥕', '🥔', '🍅', '🍆', '🐄', '🐖', '🐑', '🐔', '🚜', '🧑‍🌾', '🧺', '🌾'],
     "Markers":    ['🚩', '📍', '⬆️', '➡️', '⬇️', '⬅️', '⛔', '🚫', '🅿️'], // Separated construction sign
@@ -60,6 +60,7 @@ export const TILE_CATEGORIES = {
 // --- Default Layer Assignments (Simplified - By Category Primarily) ---
 // Assigns a layer where a tile *typically* belongs or is placed. Placement rules enforce stricter constraints.
 export const DEFAULT_TILE_LAYER = {
+    // Categories
     "Ground": LAYER_GROUND,
     "Paths": LAYER_PATHS,
     "Nature": LAYER_FEATURES,
@@ -69,7 +70,7 @@ export const DEFAULT_TILE_LAYER = {
     "Civic/Services": LAYER_BUILDINGS,
     "Vehicles": LAYER_FEATURES, // Vehicles exist on ground/paths
     "Infrastructure": LAYER_FEATURES, // Infrastructure exists on ground/paths
-    "Recreation": LAYER_BUILDINGS,
+    "Recreation": LAYER_BUILDINGS, // Assume most are structures
     "Farm": LAYER_FEATURES,
     "Markers": LAYER_FEATURES,
     "Sky/Effects": LAYER_AIR,
@@ -80,14 +81,25 @@ export const DEFAULT_TILE_LAYER = {
     '💧': LAYER_FEATURES, // Droplet is a feature/effect
 };
 
-// Helper to get the default layer for a tile (Unchanged)
+// Helper to get the default layer for a tile
 export function getDefaultLayerForTile(tileId) {
-    if (!tileId) return DEFAULT_LAYER;
-    if (DEFAULT_TILE_LAYER[tileId] !== undefined) return DEFAULT_TILE_LAYER[tileId];
-    for (const category in TILE_CATEGORIES) { if (TILE_CATEGORIES[category].includes(tileId)) return DEFAULT_TILE_LAYER[category] ?? DEFAULT_LAYER; }
+    if (!tileId) return DEFAULT_LAYER; // Handle null/undefined tileId
+
+    // Check specific overrides first
+    if (DEFAULT_TILE_LAYER[tileId] !== undefined) {
+        return DEFAULT_TILE_LAYER[tileId];
+    }
+    // Find category
+    for (const category in TILE_CATEGORIES) {
+        if (TILE_CATEGORIES[category].includes(tileId)) {
+            // Use category default, or global default if category default is missing
+            return DEFAULT_TILE_LAYER[category] ?? DEFAULT_LAYER;
+        }
+    }
     console.warn(`No default layer found for tile: ${tileId}. Using global default.`);
-    return DEFAULT_LAYER;
+    return DEFAULT_LAYER; // Fallback
 }
 
-// Defaults (Unchanged)
-export const DEFAULT_TILE = 'T_GRASS'; export const DEFAULT_SIZE = 1;
+// Defaults
+export const DEFAULT_TILE = 'T_GRASS';
+export const DEFAULT_SIZE = 1;
