@@ -31,8 +31,8 @@ function init() {
     console.log("SimEmoji MultiSize Initialized.");
 }
 
-function setupCanvas() { /* ... Unchanged ... */
-    const canvasContainer = document.getElementById('canvasContainer'); // Get container ref here
+function setupCanvas() {
+    const canvasContainer = document.getElementById('canvasContainer');
     const canvas = document.getElementById('gameCanvas');
     canvas.width = canvasContainer.offsetWidth;
     canvas.height = canvasContainer.offsetHeight;
@@ -82,251 +82,127 @@ function addEventListeners() {
 }
 
 // --- Event Handlers ---
-function handleResize() { /* ... Unchanged ... */
+function handleResize() {
     setupCanvas();
-    clampCamera(); // Re-clamp camera on resize
+    clampCamera();
 }
-function handleMouseMove(e) { /* ... Unchanged ... */
+function handleMouseMove(e) {
     const canvas = document.getElementById('gameCanvas');
     const rect = canvas.getBoundingClientRect();
     mouseScreenX = e.clientX - rect.left;
     mouseScreenY = e.clientY - rect.top;
-
     mouseWorldX = (mouseScreenX / state.zoomLevel) + state.camX;
     mouseWorldY = (mouseScreenY / state.zoomLevel) + state.camY;
     mouseGridX = Math.floor(mouseWorldX / config.BASE_GRID_SIZE);
     mouseGridY = Math.floor(mouseWorldY / config.BASE_GRID_SIZE);
-
     ui.updateCoordsDisplay(mouseGridX, mouseGridY);
-
     if (isPanning) {
         const dx = (mouseScreenX - panStartX) / state.zoomLevel;
         const dy = (mouseScreenY - panStartY) / state.zoomLevel;
-        state.setCamPos(panStartCamX - dx, panStartCamY - dy); // Update state directly
+        state.setCamPos(panStartCamX - dx, panStartCamY - dy);
         clampCamera();
     }
 }
-
 function handleMouseDown(e) {
     const canvas = document.getElementById('gameCanvas');
-    // --- Panning ---
+    // Panning... (Unchanged)
     if (e.button === 1 || (e.button === 0 && keys['Space'])) {
-        isPanning = true;
-        panStartX = mouseScreenX; panStartY = mouseScreenY;
+        isPanning = true; panStartX = mouseScreenX; panStartY = mouseScreenY;
         panStartCamX = state.camX; panStartCamY = state.camY;
-        canvas.style.cursor = 'grabbing';
-        e.preventDefault();
-        return; // Don't process tools if panning
+        canvas.style.cursor = 'grabbing'; e.preventDefault(); return;
     }
-
-    // --- Tool Interaction ---
+    // Tool Interaction...
     if (e.button === 0) {
-        const size = state.selectedSize; // Current size for placement
-        const tool = state.currentTool;
-        const originX = mouseGridX;
-        const originY = mouseGridY;
+        const size = state.selectedSize; const tool = state.currentTool;
+        const originX = mouseGridX; const originY = mouseGridY;
+        if (originX < 0 || originX + size > config.WORLD_WIDTH_CELLS || originY < 0 || originY + size > config.WORLD_HEIGHT_CELLS) return;
 
-        // Check bounds for the *entire* object area
-        if (originX < 0 || originX + size > config.WORLD_WIDTH_CELLS ||
-            originY < 0 || originY + size > config.WORLD_HEIGHT_CELLS) {
-            console.log("Placement out of bounds");
-            return;
-        }
-
-        // --- Bulldoze Logic ---
+        // Bulldoze Logic... (Unchanged from previous)
         if (tool === 'bulldoze') {
-            const key = `${originX},${originY}`;
-            const targetData = state.gridData.get(key);
-            let effectiveOriginX = originX;
-            let effectiveOriginY = originY;
-            let targetSize = 1;
-            let mainTargetData = targetData;
-
-            // If clicked on part of a multi-tile object, find its origin
+            const key = `${originX},${originY}`; const targetData = state.gridData.get(key);
+            let effectiveOriginX = originX; let effectiveOriginY = originY; let targetSize = 1; let mainTargetData = targetData;
             if (typeof targetData === 'object' && targetData !== null && !targetData.isOrigin) {
-                effectiveOriginX = targetData.originX;
-                effectiveOriginY = targetData.originY;
+                effectiveOriginX = targetData.originX; effectiveOriginY = targetData.originY;
                 mainTargetData = state.gridData.get(`${effectiveOriginX},${effectiveOriginY}`);
             }
-
-            // If there's nothing at the effective origin, do nothing
             if (!mainTargetData) return;
-
-            // Determine size of object being bulldozed
-            if (typeof mainTargetData === 'object' && mainTargetData !== null && mainTargetData.isOrigin) {
-                targetSize = mainTargetData.size;
-            } // else it's a single tile (size 1)
-
-            // Prepare action data for undo
+            if (typeof mainTargetData === 'object' && mainTargetData !== null && mainTargetData.isOrigin) { targetSize = mainTargetData.size; }
             const cellsToClear = [];
-            for (let dx = 0; dx < targetSize; dx++) {
-                for (let dy = 0; dy < targetSize; dy++) {
-                    const currentX = effectiveOriginX + dx;
-                    const currentY = effectiveOriginY + dy;
-                    const currentKey = `${currentX},${currentY}`;
-                    const oldData = state.gridData.get(currentKey) || null;
-                    if (oldData !== null) { // Only record if something was actually there
-                         cellsToClear.push({ key: currentKey, oldData: oldData, newData: null });
-                    }
-                }
-            }
+            for (let dx = 0; dx < targetSize; dx++) { for (let dy = 0; dy < targetSize; dy++) {
+                    const currentX = effectiveOriginX + dx; const currentY = effectiveOriginY + dy; const currentKey = `${currentX},${currentY}`; const oldData = state.gridData.get(currentKey) || null;
+                    if (oldData !== null) { cellsToClear.push({ key: currentKey, oldData: oldData, newData: null }); }
+            } }
+            if (cellsToClear.length > 0) { state.performAction({ type: 'bulldoze', cells: cellsToClear }); }
 
-            if (cellsToClear.length > 0) {
-                state.performAction({ type: 'bulldoze', cells: cellsToClear });
-            }
-
-        // --- Build Logic ---
+        // Build Logic... (Unchanged from previous)
         } else if (tool === 'build' && state.selectedTile) {
-            // Check if target area is clear for placement
-            let canPlace = true;
-            const cellsToPlace = [];
-
-            for (let dx = 0; dx < size; dx++) {
-                for (let dy = 0; dy < size; dy++) {
-                    const currentX = originX + dx;
-                    const currentY = originY + dy;
-                    const currentKey = `${currentX},${currentY}`;
-                    const existingData = state.gridData.get(currentKey);
-
-                    // Check if placement is blocked
+            let canPlace = true; const cellsToPlace = [];
+            for (let dx = 0; dx < size; dx++) { for (let dy = 0; dy < size; dy++) {
+                    const currentX = originX + dx; const currentY = originY + dy; const currentKey = `${currentX},${currentY}`; const existingData = state.gridData.get(currentKey);
                     if (existingData && !config.OVERWRITABLE_TILES.has(existingData)) {
-                         // If it's an object, check its origin data type if simple string isn't overwritable
-                         let effectiveData = existingData;
-                         if(typeof existingData === 'object' && existingData !== null && !existingData.isOrigin) {
-                             effectiveData = state.gridData.get(`${existingData.originX},${existingData.originY}`)
-                         }
-                         // Allow overwriting basic terrain even if it's part of an object theoretically
-                         // but better check: is it NOT overwritable? Block if so.
-                         if(typeof effectiveData === 'object' || (typeof effectiveData === 'string' && !config.OVERWRITABLE_TILES.has(effectiveData))) {
-                             canPlace = false;
-                             break; // No need to check further in this row
-                         }
+                         let effectiveData = existingData; if(typeof existingData === 'object' && existingData !== null && !existingData.isOrigin) { effectiveData = state.gridData.get(`${existingData.originX},${existingData.originY}`) }
+                         if(typeof effectiveData === 'object' || (typeof effectiveData === 'string' && !config.OVERWRITABLE_TILES.has(effectiveData))) { canPlace = false; break; }
                     }
-                     // Store intended change for undo/redo
-                     cellsToPlace.push({
-                         key: currentKey,
-                         oldData: existingData || null,
-                         newData: (dx === 0 && dy === 0) // Top-left cell
-                             ? { tile: state.selectedTile, size: size, isOrigin: true }
-                             : { originX: originX, originY: originY, isOrigin: false }
-                     });
-                }
-                if (!canPlace) break; // No need to check further rows
-            }
-
-            // If all checks pass, perform the placement action
+                    cellsToPlace.push({ key: currentKey, oldData: existingData || null, newData: (dx === 0 && dy === 0) ? { tile: state.selectedTile, size: size, isOrigin: true } : { originX: originX, originY: originY, isOrigin: false } });
+            } if (!canPlace) break; }
             if (canPlace) {
-                 // Check if the new object is identical to what's already at the origin
-                 const originKey = `${originX},${originY}`;
-                 const originData = state.gridData.get(originKey);
-                 let isIdentical = false;
-                 if (typeof originData === 'object' && originData?.isOrigin && originData.tile === state.selectedTile && originData.size === size) {
-                     isIdentical = true; // Avoid action if placing the same thing in the same spot
-                 } else if (typeof originData === 'string' && originData === state.selectedTile && size === 1) {
-                     isIdentical = true; // Avoid placing same 1x1 tile
-                 }
-
-                if (!isIdentical) {
-                    state.performAction({ type: 'place', cells: cellsToPlace });
-                }
-            } else {
-                console.log("Placement blocked");
-                // Optionally provide feedback to the user (e.g., flash red)
-            }
+                 const originKey = `${originX},${originY}`; const originData = state.gridData.get(originKey); let isIdentical = false;
+                 if (typeof originData === 'object' && originData?.isOrigin && originData.tile === state.selectedTile && originData.size === size) { isIdentical = true; }
+                 else if (typeof originData === 'string' && originData === state.selectedTile && size === 1) { isIdentical = true; }
+                 if (!isIdentical) { state.performAction({ type: 'place', cells: cellsToPlace }); }
+            } else { console.log("Placement blocked"); }
         }
     }
 }
-
 function handleMouseUp(e) { /* ... Unchanged ... */
     const canvas = document.getElementById('gameCanvas');
-    if (e.button === 1 || (e.button === 0 && isPanning)) {
-        isPanning = false;
-        canvas.style.cursor = 'crosshair';
-    }
+    if (e.button === 1 || (e.button === 0 && isPanning)) { isPanning = false; canvas.style.cursor = 'crosshair'; }
 }
 function handleMouseOut() { /* ... Unchanged ... */
     const canvas = document.getElementById('gameCanvas');
-    if (isPanning) {
-        isPanning = false;
-        canvas.style.cursor = 'crosshair';
-    }
-     mouseGridX = -1; mouseGridY = -1;
-     ui.updateCoordsDisplay(-1, -1);
+    if (isPanning) { isPanning = false; canvas.style.cursor = 'crosshair'; }
+     mouseGridX = -1; mouseGridY = -1; ui.updateCoordsDisplay(-1, -1);
 }
 function handleMouseWheel(e) { /* ... Unchanged ... */
-    e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? (1 + config.ZOOM_INCREMENT) : (1 / (1 + config.ZOOM_INCREMENT));
+    e.preventDefault(); const zoomFactor = e.deltaY < 0 ? (1 + config.ZOOM_INCREMENT) : (1 / (1 + config.ZOOM_INCREMENT));
     zoom(zoomFactor, mouseScreenX, mouseScreenY);
 }
 function handleKeyDown(e) { /* ... Unchanged ... */
-    keys[e.code] = true;
-    if (e.ctrlKey || e.metaKey) {
-        if (e.code === 'KeyZ') { e.preventDefault(); state.undo(); }
-        else if (e.code === 'KeyY') { e.preventDefault(); state.redo(); }
-        else if (e.code === 'KeyS') { e.preventDefault(); state.saveGameToFile(); }
-        else if (e.code === 'KeyO') { e.preventDefault(); ui.fileInput.click(); }
+    keys[e.code] = true; if (e.ctrlKey || e.metaKey) {
+        if (e.code === 'KeyZ') { e.preventDefault(); state.undo(); } else if (e.code === 'KeyY') { e.preventDefault(); state.redo(); }
+        else if (e.code === 'KeyS') { e.preventDefault(); state.saveGameToFile(); } else if (e.code === 'KeyO') { e.preventDefault(); ui.fileInput.click(); }
     } else {
-        if (e.code === 'KeyB') ui.setTool('build');
-        if (e.code === 'KeyX') ui.setTool('bulldoze');
-        if (e.code === 'Equal' || e.code === 'NumpadAdd') zoom(1 + config.ZOOM_INCREMENT);
-        if (e.code === 'Minus' || e.code === 'NumpadSubtract') zoom(1 / (1 + config.ZOOM_INCREMENT));
-        // Add keyboard shortcuts for size? (Optional)
-        // if (e.code === 'Digit1') ui.selectSize(1);
-        // if (e.code === 'Digit2') ui.selectSize(2);
-        // if (e.code === 'Digit3') ui.selectSize(3);
+        if (e.code === 'KeyB') ui.setTool('build'); if (e.code === 'KeyX') ui.setTool('bulldoze');
+        if (e.code === 'Equal' || e.code === 'NumpadAdd') zoom(1 + config.ZOOM_INCREMENT); if (e.code === 'Minus' || e.code === 'NumpadSubtract') zoom(1 / (1 + config.ZOOM_INCREMENT));
     }
 }
 function handleFileLoad(event) { /* ... Unchanged ... */
-    const file = event.target.files[0];
-    loadGameFromFile(file); // Call the state function
-    event.target.value = null; // Reset input
+    const file = event.target.files[0]; loadGameFromFile(file); event.target.value = null;
 }
 function handleStateLoaded() { /* ... Unchanged ... */
-    console.log("Reacting to stateLoaded event");
-    updateCurrentGridSize();
-    clampCamera();
+    console.log("Reacting to stateLoaded event"); updateCurrentGridSize(); clampCamera();
 }
 
 // --- Core Engine Logic ---
-function updateCurrentGridSize() { /* ... Unchanged ... */
-    currentGridSize = config.BASE_GRID_SIZE * state.zoomLevel;
-}
+function updateCurrentGridSize() { /* ... Unchanged ... */ currentGridSize = config.BASE_GRID_SIZE * state.zoomLevel; }
 function clampCamera() { /* ... Unchanged ... */
-    const canvas = document.getElementById('gameCanvas');
-    const worldPixelWidth = config.WORLD_WIDTH_CELLS * config.BASE_GRID_SIZE;
-    const worldPixelHeight = config.WORLD_HEIGHT_CELLS * config.BASE_GRID_SIZE;
-    const visibleWorldWidth = canvas.width / state.zoomLevel;
-    const visibleWorldHeight = canvas.height / state.zoomLevel;
-
-    let newCamX = state.camX; let newCamY = state.camY;
-    newCamX = Math.max(0, Math.min(newCamX, worldPixelWidth - visibleWorldWidth));
-    newCamY = Math.max(0, Math.min(newCamY, worldPixelHeight - visibleWorldHeight));
-    if (worldPixelWidth < visibleWorldWidth) newCamX = (worldPixelWidth - visibleWorldWidth) / 2;
-    if (worldPixelHeight < visibleWorldHeight) newCamY = (worldPixelHeight - visibleWorldHeight) / 2;
+    const canvas = document.getElementById('gameCanvas'); const worldPixelWidth = config.WORLD_WIDTH_CELLS * config.BASE_GRID_SIZE; const worldPixelHeight = config.WORLD_HEIGHT_CELLS * config.BASE_GRID_SIZE;
+    const visibleWorldWidth = canvas.width / state.zoomLevel; const visibleWorldHeight = canvas.height / state.zoomLevel; let newCamX = state.camX; let newCamY = state.camY;
+    newCamX = Math.max(0, Math.min(newCamX, worldPixelWidth - visibleWorldWidth)); newCamY = Math.max(0, Math.min(newCamY, worldPixelHeight - visibleWorldHeight));
+    if (worldPixelWidth < visibleWorldWidth) newCamX = (worldPixelWidth - visibleWorldWidth) / 2; if (worldPixelHeight < visibleWorldHeight) newCamY = (worldPixelHeight - visibleWorldHeight) / 2;
     state.setCamPos(newCamX, newCamY);
 }
 function zoom(factor, pivotX, pivotY) { /* ... Unchanged ... */
-    const canvas = document.getElementById('gameCanvas');
-    pivotX = pivotX ?? canvas.width / 2;
-    pivotY = pivotY ?? canvas.height / 2;
-    const newZoomLevel = Math.max(config.MIN_ZOOM, Math.min(config.MAX_ZOOM, state.zoomLevel * factor));
-    if (newZoomLevel === state.zoomLevel) return;
-    const worldPivotX = (pivotX / state.zoomLevel) + state.camX;
-    const worldPivotY = (pivotY / state.zoomLevel) + state.camY;
-    state.setZoomLevel(newZoomLevel);
-    updateCurrentGridSize();
-    const newCamX = worldPivotX - (pivotX / newZoomLevel);
-    const newCamY = worldPivotY - (pivotY / newZoomLevel);
-    state.setCamPos(newCamX, newCamY);
-    clampCamera();
+    const canvas = document.getElementById('gameCanvas'); pivotX = pivotX ?? canvas.width / 2; pivotY = pivotY ?? canvas.height / 2;
+    const newZoomLevel = Math.max(config.MIN_ZOOM, Math.min(config.MAX_ZOOM, state.zoomLevel * factor)); if (newZoomLevel === state.zoomLevel) return;
+    const worldPivotX = (pivotX / state.zoomLevel) + state.camX; const worldPivotY = (pivotY / state.zoomLevel) + state.camY;
+    state.setZoomLevel(newZoomLevel); updateCurrentGridSize(); const newCamX = worldPivotX - (pivotX / newZoomLevel); const newCamY = worldPivotY - (pivotY / newZoomLevel);
+    state.setCamPos(newCamX, newCamY); clampCamera();
 }
-function updatePanningInput() { /* ... Unchanged (but fixed previously) ... */
-    let dx = 0; let dy = 0;
-    const panAmount = config.PAN_SPEED_FACTOR * config.BASE_GRID_SIZE;
-    if (keys['ArrowLeft'] || keys['KeyA']) dx -= panAmount;
-    if (keys['ArrowRight'] || keys['KeyD']) dx += panAmount;
-    if (keys['ArrowUp'] || keys['KeyW']) dy -= panAmount;
-    if (keys['ArrowDown'] || keys['KeyS']) dy += panAmount;
+function updatePanningInput() { /* ... Unchanged ... */
+    let dx = 0; let dy = 0; const panAmount = config.PAN_SPEED_FACTOR * config.BASE_GRID_SIZE;
+    if (keys['ArrowLeft'] || keys['KeyA']) dx -= panAmount; if (keys['ArrowRight'] || keys['KeyD']) dx += panAmount;
+    if (keys['ArrowUp'] || keys['KeyW']) dy -= panAmount; if (keys['ArrowDown'] || keys['KeyS']) dy += panAmount;
     if (dx !== 0 || dy !== 0) { state.setCamPos(state.camX + dx, state.camY + dy); clampCamera(); }
 }
 
@@ -341,137 +217,98 @@ function render() {
     ctx.scale(state.zoomLevel, state.zoomLevel);
 
     // Visible range calculations... (Unchanged)
-    const viewLeftWorld = state.camX;
-    const viewTopWorld = state.camY;
-    const viewRightWorld = state.camX + canvas.width / state.zoomLevel;
-    const viewBottomWorld = state.camY + canvas.height / state.zoomLevel;
-    const startGridX = Math.floor(viewLeftWorld / config.BASE_GRID_SIZE) - 1;
-    const endGridX = Math.ceil(viewRightWorld / config.BASE_GRID_SIZE) + 1;
-    const startGridY = Math.floor(viewTopWorld / config.BASE_GRID_SIZE) - 1;
+    const viewLeftWorld = state.camX; const viewTopWorld = state.camY; const viewRightWorld = state.camX + canvas.width / state.zoomLevel;
+    const viewBottomWorld = state.camY + canvas.height / state.zoomLevel; const startGridX = Math.floor(viewLeftWorld / config.BASE_GRID_SIZE) - 1;
+    const endGridX = Math.ceil(viewRightWorld / config.BASE_GRID_SIZE) + 1; const startGridY = Math.floor(viewTopWorld / config.BASE_GRID_SIZE) - 1;
     const endGridY = Math.ceil(viewBottomWorld / config.BASE_GRID_SIZE) + 1;
 
     // Draw Grid... (Unchanged)
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
-    ctx.lineWidth = 1 / state.zoomLevel;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'; ctx.lineWidth = 1 / state.zoomLevel;
     for (let x = startGridX; x <= endGridX; x++) { const wx = x * config.BASE_GRID_SIZE; ctx.beginPath(); ctx.moveTo(wx, startGridY * config.BASE_GRID_SIZE); ctx.lineTo(wx, endGridY * config.BASE_GRID_SIZE); ctx.stroke(); }
     for (let y = startGridY; y <= endGridY; y++) { const wy = y * config.BASE_GRID_SIZE; ctx.beginPath(); ctx.moveTo(startGridX * config.BASE_GRID_SIZE, wy); ctx.lineTo(endGridX * config.BASE_GRID_SIZE, wy); ctx.stroke(); }
 
-
-    // Draw Placed Tiles (UPDATED for Multi-Tile)
-    const baseTileFontSize = config.BASE_GRID_SIZE * 0.8;
-    ctx.font = `${baseTileFontSize}px sans-serif`;
+    // Draw Placed Tiles ( *** CORRECTED *** )
+    const baseTileFontSize = config.BASE_GRID_SIZE * 0.8; // Base size for 1x1
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
     for (let gx = startGridX; gx < endGridX; gx++) {
         for (let gy = startGridY; gy < endGridY; gy++) {
-            if (gx < 0 || gx >= config.WORLD_WIDTH_CELLS || gy < 0 || gy >= config.WORLD_HEIGHT_CELLS) continue;
+             if (gx < 0 || gx >= config.WORLD_WIDTH_CELLS || gy < 0 || gy >= config.WORLD_HEIGHT_CELLS) continue;
             const gridKey = `${gx},${gy}`;
             const tileData = state.gridData.get(gridKey);
 
-            // Only draw if it's a simple tile string OR the origin of a multi-tile object
             if (typeof tileData === 'string') {
-                // Draw simple string tile
+                // Draw simple 1x1 string tile
+                ctx.font = `${baseTileFontSize}px sans-serif`; // Use base font size
                 ctx.fillText(tileData, gx * config.BASE_GRID_SIZE + config.BASE_GRID_SIZE / 2, gy * config.BASE_GRID_SIZE + config.BASE_GRID_SIZE / 2);
             } else if (typeof tileData === 'object' && tileData !== null && tileData.isOrigin) {
-                // Draw the origin tile of a multi-tile object
-                // For now, draw it centered in its top-left cell.
-                // Could optionally draw larger or centered over its full area later.
-                 ctx.fillText(tileData.tile, gx * config.BASE_GRID_SIZE + config.BASE_GRID_SIZE / 2, gy * config.BASE_GRID_SIZE + config.BASE_GRID_SIZE / 2);
-                 // --- Optional: Draw border around multi-tile object ---
-                 // ctx.strokeStyle = 'rgba(0,0,255,0.3)'; // Example blue border
-                 // ctx.lineWidth = 1 / state.zoomLevel;
-                 // ctx.strokeRect(gx * config.BASE_GRID_SIZE, gy * config.BASE_GRID_SIZE, config.BASE_GRID_SIZE * tileData.size, config.BASE_GRID_SIZE * tileData.size);
-                 // ------------------------------------------------------
+                // It's the origin of a potentially multi-tile object
+                const objectSize = tileData.size || 1; // Get the size (default to 1 if missing)
+                const objectWorldWidth = config.BASE_GRID_SIZE * objectSize;
+                const objectWorldHeight = config.BASE_GRID_SIZE * objectSize;
+                // Calculate the center position of the entire object area
+                const centerX = gx * config.BASE_GRID_SIZE + objectWorldWidth / 2;
+                const centerY = gy * config.BASE_GRID_SIZE + objectWorldHeight / 2;
+
+                // Scale font size based on object size (adjust multiplier as needed)
+                const scaledFontSize = baseTileFontSize * (objectSize * 0.8); // Make bigger objects have bigger emojis
+                ctx.font = `${scaledFontSize}px sans-serif`;
+
+                // Draw the object's tile centered in its area
+                ctx.fillText(tileData.tile, centerX, centerY);
             }
-            // Implicitly skip drawing if it's part of a multi-tile object but not the origin
+            // Skip drawing non-origin parts of multi-tile objects
         }
     }
+    // Reset font just in case for previews etc.
+    ctx.font = `${baseTileFontSize}px sans-serif`;
 
-    // Draw Mouse Hover / Tool Preview (UPDATED for Multi-Tile & Validity)
-    if (mouseGridX >= 0 && mouseGridY >= 0 && // Basic bounds check
-        mouseScreenX >= 0 && mouseScreenY >= 0 && mouseScreenX <= canvas.width && mouseScreenY <= canvas.height)
+    // Draw Mouse Hover / Tool Preview (Unchanged from previous - already handled preview size)
+     if (mouseGridX >= 0 && mouseGridY >= 0 && mouseScreenX >= 0 && mouseScreenY >= 0 && mouseScreenX <= canvas.width && mouseScreenY <= canvas.height)
     {
-        const hoverSize = state.currentTool === 'build' ? state.selectedSize : 1; // Bulldoze always targets 1x1 initially
-        const hoverEndX = mouseGridX + hoverSize;
-        const hoverEndY = mouseGridY + hoverSize;
-
-        // Check if hover area is within world bounds
+        const hoverSize = state.currentTool === 'build' ? state.selectedSize : 1;
+        const hoverEndX = mouseGridX + hoverSize; const hoverEndY = mouseGridY + hoverSize;
         if (hoverEndX <= config.WORLD_WIDTH_CELLS && hoverEndY <= config.WORLD_HEIGHT_CELLS) {
-            const hoverWorldX = mouseGridX * config.BASE_GRID_SIZE;
-            const hoverWorldY = mouseGridY * config.BASE_GRID_SIZE;
-            const previewWorldWidth = config.BASE_GRID_SIZE * hoverSize;
-            const previewWorldHeight = config.BASE_GRID_SIZE * hoverSize;
+            const hoverWorldX = mouseGridX * config.BASE_GRID_SIZE; const hoverWorldY = mouseGridY * config.BASE_GRID_SIZE;
+            const previewWorldWidth = config.BASE_GRID_SIZE * hoverSize; const previewWorldHeight = config.BASE_GRID_SIZE * hoverSize;
             ctx.lineWidth = 2 / state.zoomLevel;
-
             if (state.currentTool === 'build' && state.selectedTile) {
-                // Check placement validity
                 let canPlacePreview = true;
-                for (let dx = 0; dx < hoverSize; dx++) {
-                    for (let dy = 0; dy < hoverSize; dy++) {
-                        const checkX = mouseGridX + dx;
-                        const checkY = mouseGridY + dy;
-                        const existingData = state.gridData.get(`${checkX},${checkY}`);
+                for (let dx = 0; dx < hoverSize; dx++) { for (let dy = 0; dy < hoverSize; dy++) {
+                        const checkX = mouseGridX + dx; const checkY = mouseGridY + dy; const existingData = state.gridData.get(`${checkX},${checkY}`);
                         if (existingData && !config.OVERWRITABLE_TILES.has(existingData)) {
-                             let effectiveData = existingData;
-                             if(typeof existingData === 'object' && existingData !== null && !existingData.isOrigin) {
-                                 effectiveData = state.gridData.get(`${existingData.originX},${existingData.originY}`)
-                             }
-                             if(typeof effectiveData === 'object' || (typeof effectiveData === 'string' && !config.OVERWRITABLE_TILES.has(effectiveData))) {
-                                 canPlacePreview = false;
-                                 break;
-                             }
+                             let effectiveData = existingData; if(typeof existingData === 'object' && existingData !== null && !existingData.isOrigin) { effectiveData = state.gridData.get(`${existingData.originX},${existingData.originY}`) }
+                             if(typeof effectiveData === 'object' || (typeof effectiveData === 'string' && !config.OVERWRITABLE_TILES.has(effectiveData))) { canPlacePreview = false; break; }
                         }
-                    }
-                    if (!canPlacePreview) break;
-                }
-
-                // Draw semi-transparent tile centered in the potential area
+                } if (!canPlacePreview) break; }
                 ctx.globalAlpha = 0.5;
-                // Adjust font size slightly for preview if multi-tile? Optional.
-                // const previewFontSize = config.BASE_GRID_SIZE * 0.8 * (hoverSize > 1 ? 0.8 : 1.0);
-                // ctx.font = `${previewFontSize}px sans-serif`;
+                // Draw preview tile centered in its potential area
+                const previewFontSize = baseTileFontSize * (hoverSize * 0.8); // Match render logic scaling
+                ctx.font = `${previewFontSize}px sans-serif`;
                 ctx.fillText(state.selectedTile, hoverWorldX + previewWorldWidth / 2, hoverWorldY + previewWorldHeight / 2);
-                ctx.globalAlpha = 1.0;
-                ctx.font = `${baseTileFontSize}px sans-serif`; // Reset font
-
-                // Draw border: Green if valid, Red if invalid
+                ctx.globalAlpha = 1.0; ctx.font = `${baseTileFontSize}px sans-serif`; // Reset font
                 ctx.strokeStyle = canPlacePreview ? 'rgba(0, 255, 0, 0.8)' : 'rgba(255, 0, 0, 0.8)';
                 ctx.strokeRect(hoverWorldX + ctx.lineWidth/2, hoverWorldY + ctx.lineWidth/2, previewWorldWidth - ctx.lineWidth, previewWorldHeight - ctx.lineWidth);
-
             } else if (state.currentTool === 'bulldoze') {
-                // Highlight the single cell OR the entire object if hovering over part of one
-                let effectiveOriginX = mouseGridX;
-                let effectiveOriginY = mouseGridY;
-                let targetSize = 1;
+                let effectiveOriginX = mouseGridX; let effectiveOriginY = mouseGridY; let targetSize = 1;
                 const targetData = state.gridData.get(`${mouseGridX},${mouseGridY}`);
                  if (typeof targetData === 'object' && targetData !== null && !targetData.isOrigin) {
-                    effectiveOriginX = targetData.originX;
-                    effectiveOriginY = targetData.originY;
-                    const mainTargetData = state.gridData.get(`${effectiveOriginX},${effectiveOriginY}`);
-                    if(typeof mainTargetData === 'object' && mainTargetData !== null && mainTargetData.isOrigin) {
-                        targetSize = mainTargetData.size;
-                    }
-                 } else if (typeof targetData === 'object' && targetData !== null && targetData.isOrigin) {
-                     targetSize = targetData.size;
-                 }
-
-                const effectiveHoverX = effectiveOriginX * config.BASE_GRID_SIZE;
-                const effectiveHoverY = effectiveOriginY * config.BASE_GRID_SIZE;
+                    effectiveOriginX = targetData.originX; effectiveOriginY = targetData.originY; const mainTargetData = state.gridData.get(`${effectiveOriginX},${effectiveOriginY}`);
+                    if(typeof mainTargetData === 'object' && mainTargetData !== null && mainTargetData.isOrigin) { targetSize = mainTargetData.size; }
+                 } else if (typeof targetData === 'object' && targetData !== null && targetData.isOrigin) { targetSize = targetData.size; }
+                const effectiveHoverX = effectiveOriginX * config.BASE_GRID_SIZE; const effectiveHoverY = effectiveOriginY * config.BASE_GRID_SIZE;
                 const effectivePreviewSize = config.BASE_GRID_SIZE * targetSize;
-
-                ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)'; // Red for bulldoze
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
                 ctx.strokeRect(effectiveHoverX + ctx.lineWidth/2, effectiveHoverY + ctx.lineWidth/2, effectivePreviewSize - ctx.lineWidth, effectivePreviewSize - ctx.lineWidth);
             }
         }
     }
 
-
     ctx.restore(); // Restore canvas state
 }
 
-
 // --- Game Loop ---
-function gameLoop() { /* ... Unchanged ... */
+function gameLoop() {
     updatePanningInput();
     render();
     requestAnimationFrame(gameLoop);
