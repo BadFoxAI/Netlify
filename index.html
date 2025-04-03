@@ -3,30 +3,416 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Leaflet Map</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <title>SimEmoji - Core Engine v2</title>
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; }
-        #map { width: 100%; height: 100vh; }
+        body { margin: 0; overflow: hidden; background-color: #222; display: flex; font-family: sans-serif; }
+        #canvasContainer { flex-grow: 1; position: relative; }
+        canvas { display: block; background-color: #5a8b5a; cursor: crosshair; }
+        #uiPanel {
+            width: 240px; /* Slightly wider for more buttons */
+            height: 100vh;
+            background-color: #333;
+            color: #eee;
+            padding: 10px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #controls {
+            padding-bottom: 10px;
+            border-bottom: 1px solid #555;
+            margin-bottom: 10px;
+            flex-shrink: 0; /* Prevent controls from shrinking */
+        }
+        #controls h2, #palette h2 { margin: 0 0 8px 0; font-size: 1.1em; }
+        #controls div { margin-bottom: 8px; font-size: 0.9em; }
+        #controls button {
+            width: 48%; margin: 1%; padding: 5px 3px; /* Adjusted padding */
+            background-color: #555; border: 1px solid #777; color: #eee;
+            cursor: pointer; font-size: 0.85em; /* Slightly smaller font */
+        }
+        #controls button.active-tool { background-color: #77a; border-color: #99c; }
+        #controls button.danger { background-color: #a55; border-color: #c77; } /* Style for Clear button */
+        #selectedEmojiDisplay { font-size: 24px; margin-left: 5px; vertical-align: middle; }
+        #coordsDisplay { font-size: 0.8em; color: #aaa; margin-top: 5px; }
+        #saveStatus { font-size: 0.8em; color: #8f8; height: 1.2em; margin-top: 4px; } /* For save/load messages */
+
+        #palette {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+        #palette .emoji-category {
+            margin-bottom: 10px;
+            border-bottom: 1px dashed #555;
+            padding-bottom: 5px;
+        }
+        #palette .emoji-category h3 { margin: 0 0 3px 0; font-size: 0.9em; color: #bbb; }
+        #palette span {
+            display: inline-block; font-size: 22px; padding: 2px; margin: 1px;
+            cursor: pointer; border-radius: 3px; border: 1px solid transparent;
+            user-select: none; width: 28px; text-align: center; line-height: 1.2;
+        }
+        #palette span:hover { background-color: #555; }
+        #palette span.selected-emoji { border: 1px solid #ffff00; background-color: rgba(255, 255, 0, 0.2); }
     </style>
 </head>
 <body>
-    <div id="map"></div>
+    <div id="uiPanel">
+        <div id="controls">
+            <h2>SimEmoji</h2>
+            <div>Tool: <span id="toolDisplay">Build</span> <span id="selectedEmojiDisplay">❓</span></div>
+            <div>
+                <button id="buildToolBtn" class="active-tool">Build</button>
+                <button id="bulldozeToolBtn">Bulldoze</button>
+            </div>
+             <div>
+                <button id="saveBtn">Save</button>
+                <button id="loadBtn">Load</button>
+            </div>
+             <div>
+                <button id="clearSaveBtn" class="danger">Clear Save</button>
+             </div>
+            <div id="coordsDisplay">Canvas: 0,0 | Grid: 0,0</div>
+            <div id="saveStatus"></div> <!-- Status message area -->
+        </div>
+        <div id="palette">
+            <h2>Palette</h2>
+            <!-- Emoji categories will be injected here -->
+        </div>
+    </div>
+    <div id="canvasContainer">
+        <canvas id="gameCanvas"></canvas>
+    </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        // Initialize the map
-        var map = L.map('map').setView([40.7128, -74.0060], 13); // New York City
+<script>
+// --- Configuration ---
+const GRID_SIZE = 32;
+const WORLD_WIDTH_CELLS = 100;
+const WORLD_HEIGHT_CELLS = 80;
+const PAN_SPEED = 15;
+const SAVE_KEY = 'simEmojiSave'; // Key for localStorage
 
-        // Add OpenStreetMap tiles
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
+// --- DOM Elements ---
+const canvasContainer = document.getElementById('canvasContainer');
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const paletteDiv = document.getElementById('palette');
+const toolDisplay = document.getElementById('toolDisplay');
+const selectedEmojiDisplay = document.getElementById('selectedEmojiDisplay');
+const coordsDisplay = document.getElementById('coordsDisplay');
+const buildToolBtn = document.getElementById('buildToolBtn');
+const bulldozeToolBtn = document.getElementById('bulldozeToolBtn');
+const saveBtn = document.getElementById('saveBtn');
+const loadBtn = document.getElementById('loadBtn');
+const clearSaveBtn = document.getElementById('clearSaveBtn');
+const saveStatus = document.getElementById('saveStatus');
 
-        // Add a marker
-        L.marker([40.7128, -74.0060]).addTo(map)
-            .bindPopup("<b>Hello!</b><br>Welcome to NYC.")
-            .openPopup();
-    </script>
+// --- Game State ---
+let camX = 0;
+let camY = 0;
+let gridData = new Map(); // key="x,y", value=emoji_char
+let selectedEmoji = '🌳';
+let currentTool = 'build';
+let mouseScreenX = 0, mouseScreenY = 0;
+let mouseGridX = 0, mouseGridY = 0;
+let keys = {};
+let statusTimeout; // To clear status messages
+
+// --- Emoji Definitions (Expanded) ---
+const emojiCategories = {
+    "Nature": ['🌳','🌲','🌴','🌵','🌱','🌿','☘️','🍀','🍄','🌸','🌷','🌻','🌼','🍁','🍂','🍃','🌊','💧','🔥','💨','⛰️','🌋','🏞️','🏜️','🏝️','🌾','🌊'],
+    "Residential": ['🏠','🏡','🏘️','🛖','🏚️'],
+    "Commercial": ['🏢','🏬','🏪','🛒','🛍️','🏨','🏦','🏧','🍔','🍕','☕'],
+    "Industrial": ['🏭','🔧','⚙️','🧱','🪵','⛏️','🏗️'],
+    "Civic/Services": ['🏛️','🏫','🏥','🏤','⛪','🕌','🕍','⛩️','🏰','🏯','🏟️','🚓','🚑','🚒','⛽','💡','♻️','🛰️'],
+    "Transport": ['🚗','🚕','🚌','🚚','🚛','🚧','🚦','🛣️','🛤️','🌉','⚓','🚢','🚤','✈️','🚁','🚀','⛽'],
+    "Recreation": ['🎡','🎢','🎪','🎭','🏞️','🏕️','🏖️','⛱️','⛲','⛳','⚽','🏀','🏈','⚾','🎾','🎳','🎣','🏊','🏄'], // Note: Park emoji '🏞️' repeated
+    "Farm": ['🍓','🍎','🌽','🥕','🥔','🍅','🍆','🐄','🐖','🐑','🐔','🚜','🧑‍🌾','🧺'],
+    "Signs/Markers": ['🚩','📍','🚧','⬆️','➡️','⬇️','⬅️','⛔','🚫','🅿️'],
+    "Special/Misc": ['⭐','❓','☀️','🌙','☁️','⚡','💥','💫','✨','💯','💣','💰','🗿']
+};
+
+// --- Initialization ---
+function init() {
+    setupCanvas();
+    populatePalette();
+    addEventListeners();
+    loadGame(); // Try loading saved data first
+    selectEmoji(selectedEmoji); // Set initial/loaded emoji
+    updateToolUI();
+    gameLoop();
+    console.log("SimEmoji Core v2 Initialized. Added Save/Load/Clear and more emojis.");
+}
+
+function setupCanvas() {
+    canvas.width = canvasContainer.offsetWidth;
+    canvas.height = canvasContainer.offsetHeight;
+    ctx.imageSmoothingEnabled = false;
+}
+
+function populatePalette() {
+    paletteDiv.innerHTML = '<h2>Palette</h2>';
+    for (const category in emojiCategories) {
+        const catDiv = document.createElement('div');
+        catDiv.className = 'emoji-category';
+        const title = document.createElement('h3');
+        title.textContent = category;
+        catDiv.appendChild(title);
+
+        emojiCategories[category].forEach(emoji => {
+            const span = document.createElement('span');
+            span.textContent = emoji;
+            span.dataset.emoji = emoji;
+            span.title = `Build ${emoji}`;
+            span.onclick = () => {
+                selectEmoji(emoji);
+                setTool('build');
+            };
+            catDiv.appendChild(span);
+        });
+        paletteDiv.appendChild(catDiv);
+    }
+}
+
+// --- Event Handling ---
+function addEventListeners() {
+    window.addEventListener('resize', setupCanvas);
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mouseout', () => {
+         mouseGridX = -1; mouseGridY = -1;
+         updateCoordsDisplay(-1, -1, -1, -1);
+    });
+
+    buildToolBtn.addEventListener('click', () => setTool('build'));
+    bulldozeToolBtn.addEventListener('click', () => setTool('bulldoze'));
+    saveBtn.addEventListener('click', saveGame);
+    loadBtn.addEventListener('click', loadGame);
+    clearSaveBtn.addEventListener('click', clearSaveData);
+
+
+    window.addEventListener('keydown', (e) => { keys[e.code] = true; });
+    window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+}
+
+function handleMouseMove(e) {
+    const rect = canvas.getBoundingClientRect();
+    mouseScreenX = e.clientX - rect.left;
+    mouseScreenY = e.clientY - rect.top;
+    const worldX = mouseScreenX + camX;
+    const worldY = mouseScreenY + camY;
+    mouseGridX = Math.floor(worldX / GRID_SIZE);
+    mouseGridY = Math.floor(worldY / GRID_SIZE);
+    updateCoordsDisplay(mouseScreenX, mouseScreenY, mouseGridX, mouseGridY);
+}
+
+function handleMouseDown(e) {
+    if (e.button !== 0) return;
+    if (mouseGridX < 0 || mouseGridX >= WORLD_WIDTH_CELLS || mouseGridY < 0 || mouseGridY >= WORLD_HEIGHT_CELLS) return;
+
+    const gridKey = `${mouseGridX},${mouseGridY}`;
+    if (currentTool === 'build' && selectedEmoji) {
+        gridData.set(gridKey, selectedEmoji);
+    } else if (currentTool === 'bulldoze') {
+        gridData.delete(gridKey);
+    }
+     // Note: No re-render needed here, game loop handles it.
+}
+
+// --- Core Logic ---
+function selectEmoji(emoji) {
+    selectedEmoji = emoji;
+    selectedEmojiDisplay.textContent = emoji;
+    const spans = paletteDiv.querySelectorAll('span');
+    spans.forEach(span => {
+        span.classList.toggle('selected-emoji', span.dataset.emoji === emoji);
+    });
+}
+
+function setTool(toolName) {
+    currentTool = toolName;
+    updateToolUI();
+}
+
+function updateToolUI() {
+    toolDisplay.textContent = currentTool === 'build' ? 'Build' : 'Bulldoze';
+    selectedEmojiDisplay.style.display = currentTool === 'build' ? 'inline' : 'none';
+    buildToolBtn.classList.toggle('active-tool', currentTool === 'build');
+    bulldozeToolBtn.classList.toggle('active-tool', currentTool === 'bulldoze');
+}
+
+function updateCoordsDisplay(sx, sy, gx, gy) {
+    coordsDisplay.textContent = `Canvas: ${sx.toFixed(0)},${sy.toFixed(0)} | Grid: ${gx},${gy}`;
+}
+
+function updatePanning() {
+    let dx = 0; dy = 0;
+    if (keys['ArrowLeft'] || keys['KeyA']) dx -= PAN_SPEED;
+    if (keys['ArrowRight'] || keys['KeyD']) dx += PAN_SPEED;
+    if (keys['ArrowUp'] || keys['KeyW']) dy -= PAN_SPEED;
+    if (keys['ArrowDown'] || keys['KeyS']) dy += PAN_SPEED;
+
+    if (dx !== 0 || dy !== 0) {
+        camX += dx; camY += dy;
+        const worldPixelWidth = WORLD_WIDTH_CELLS * GRID_SIZE;
+        const worldPixelHeight = WORLD_HEIGHT_CELLS * GRID_SIZE;
+        camX = Math.max(0, Math.min(camX, worldPixelWidth - canvas.width));
+        camY = Math.max(0, Math.min(camY, worldPixelHeight - canvas.height));
+    }
+}
+
+// --- Save/Load Logic ---
+function saveGame() {
+    try {
+        // Convert Map to array for JSON serialization
+        const gridArray = Array.from(gridData.entries());
+        const saveData = {
+            grid: gridArray,
+            camera: { x: camX, y: camY },
+            selected: selectedEmoji // Also save the selected emoji
+        };
+        localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+        showStatusMessage("Game Saved!", true);
+    } catch (error) {
+        console.error("Error saving game:", error);
+        showStatusMessage("Error saving game.", false);
+    }
+}
+
+function loadGame() {
+    const savedString = localStorage.getItem(SAVE_KEY);
+    if (!savedString) {
+        showStatusMessage("No save data found.", false);
+        // Keep default gridData (empty map) and camera pos
+        gridData = new Map(); // Ensure it's reset if load fails or no data
+        camX = 0;
+        camY = 0;
+        selectEmoji('🌳'); // Reset to default
+        return false; // Indicate load failed or no data
+    }
+
+    try {
+        const saveData = JSON.parse(savedString);
+        // Reconstruct the Map from the array
+        gridData = new Map(saveData.grid);
+        if (saveData.camera) {
+             camX = saveData.camera.x || 0;
+             camY = saveData.camera.y || 0;
+        } else {
+             camX = 0; camY = 0;
+        }
+        // Load selected emoji, default if not saved
+        selectEmoji(saveData.selected || '🌳');
+
+        showStatusMessage("Game Loaded!", true);
+        // No explicit re-render needed, game loop will draw the new state
+        return true; // Indicate success
+    } catch (error) {
+        console.error("Error loading game:", error);
+        showStatusMessage("Error loading save data.", false);
+         gridData = new Map(); // Reset grid on load error
+         camX = 0; camY = 0;
+         selectEmoji('🌳');
+        return false; // Indicate load failed
+    }
+}
+
+function clearSaveData() {
+    if (window.confirm("Are you sure you want to delete all saved game data? This cannot be undone.")) {
+        try {
+            localStorage.removeItem(SAVE_KEY);
+            showStatusMessage("Save data cleared.", true);
+            // Optionally reset the current game state to empty
+            // gridData = new Map();
+            // camX = 0; camY = 0;
+            // selectEmoji('🌳');
+            // updateToolUI();
+        } catch (error) {
+            console.error("Error clearing save data:", error);
+            showStatusMessage("Error clearing save data.", false);
+        }
+    }
+}
+
+function showStatusMessage(message, isSuccess) {
+     // Clear previous timeout if exists
+    if (statusTimeout) clearTimeout(statusTimeout);
+
+    saveStatus.textContent = message;
+    saveStatus.style.color = isSuccess ? '#8f8' : '#f88'; // Green for success, Red for error/info
+
+    // Clear message after 3 seconds
+    statusTimeout = setTimeout(() => {
+        saveStatus.textContent = '';
+    }, 3000);
+}
+
+// --- Rendering ---
+function gameLoop() {
+    updatePanning();
+    render();
+    requestAnimationFrame(gameLoop);
+}
+
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(-camX, -camY);
+
+    // --- Draw Grid ---
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+    ctx.lineWidth = 1;
+    const startGridX = Math.floor(camX / GRID_SIZE);
+    const endGridX = Math.ceil((camX + canvas.width) / GRID_SIZE);
+    const startGridY = Math.floor(camY / GRID_SIZE);
+    const endGridY = Math.ceil((camY + canvas.height) / GRID_SIZE);
+
+    for (let x = startGridX; x <= endGridX; x++) {
+        ctx.beginPath(); ctx.moveTo(x * GRID_SIZE, startGridY * GRID_SIZE); ctx.lineTo(x * GRID_SIZE, endGridY * GRID_SIZE); ctx.stroke();
+    }
+    for (let y = startGridY; y <= endGridY; y++) {
+        ctx.beginPath(); ctx.moveTo(startGridX * GRID_SIZE, y * GRID_SIZE); ctx.lineTo(endGridX * GRID_SIZE, y * GRID_SIZE); ctx.stroke();
+    }
+
+    // --- Draw Placed Emojis ---
+    ctx.font = `${GRID_SIZE * 0.8}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let gx = startGridX; gx < endGridX; gx++) {
+        for (let gy = startGridY; gy < endGridY; gy++) {
+             if (gx < 0 || gx >= WORLD_WIDTH_CELLS || gy < 0 || gy >= WORLD_HEIGHT_CELLS) continue;
+            const gridKey = `${gx},${gy}`;
+            if (gridData.has(gridKey)) {
+                ctx.fillText(gridData.get(gridKey), gx * GRID_SIZE + GRID_SIZE / 2, gy * GRID_SIZE + GRID_SIZE / 2);
+            }
+        }
+    }
+
+     // --- Draw Mouse Hover / Tool Preview ---
+    if (mouseGridX >= 0 && mouseGridY >= 0 && mouseGridX < WORLD_WIDTH_CELLS && mouseGridY < WORLD_HEIGHT_CELLS) {
+        const hoverWorldX = mouseGridX * GRID_SIZE;
+        const hoverWorldY = mouseGridY * GRID_SIZE;
+        if (currentTool === 'build' && selectedEmoji) {
+            ctx.globalAlpha = 0.5;
+            ctx.fillText(selectedEmoji, hoverWorldX + GRID_SIZE / 2, hoverWorldY + GRID_SIZE / 2);
+            ctx.globalAlpha = 1.0;
+            ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)'; ctx.lineWidth = 2;
+            ctx.strokeRect(hoverWorldX + 1, hoverWorldY + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+        } else if (currentTool === 'bulldoze') {
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)'; ctx.lineWidth = 2;
+            ctx.strokeRect(hoverWorldX + 1, hoverWorldY + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.3)'; ctx.font = `${GRID_SIZE * 0.9}px sans-serif`;
+            ctx.fillText('X', hoverWorldX + GRID_SIZE / 2, hoverWorldY + GRID_SIZE / 2);
+        }
+    }
+
+    ctx.restore();
+}
+
+
+// --- Start the engine ---
+init();
+
+</script>
 </body>
 </html>
