@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SimEmoji - Refactored</title>
+    <title>SimEmoji - MultiSize</title>
     <style>
-        /* CSS remains largely the same as v3 - Copied here for completeness */
+        /* CSS remains largely the same - Copied here for completeness */
         body { margin: 0; overflow: hidden; background-color: #222; display: flex; font-family: sans-serif; }
         #canvasContainer { flex-grow: 1; position: relative; overflow: hidden; }
         canvas { display: block; background-color: #5a8b5a; cursor: crosshair; image-rendering: pixelated; }
@@ -17,18 +17,25 @@
         .ui-section { padding-bottom: 10px; border-bottom: 1px solid #555; margin-bottom: 10px; flex-shrink: 0; }
         .ui-section h2, #palette h2 { margin: 0 0 8px 0; font-size: 1.0em; text-align: center; }
         .button-group { display: flex; justify-content: space-around; margin-bottom: 8px; }
+        /* Increased specificity for size buttons */
+        .button-group.size-selector button {
+             font-size: 14px; /* Smaller font for text like 1x1 */
+             padding: 5px 3px;
+        }
         .button-group button, .button-group span {
             background: none; border: 1px solid #777; color: #eee; cursor: pointer;
             font-size: 20px; padding: 4px 8px; border-radius: 4px;
             line-height: 1; user-select: none; flex-grow: 1; margin: 0 2px; text-align: center;
         }
         .button-group button:hover, .button-group span:hover { background-color: #555; }
-        .button-group button.active-tool { background-color: #77a; border-color: #99c; }
+        .button-group button.active-tool, .button-group button.active-size { /* Added active-size */
+             background-color: #77a; border-color: #99c;
+        }
         .button-group button:disabled { color: #777; cursor: default; background-color: #444; border-color: #555;}
         .button-group span.danger { border-color: #c77; }
         .button-group span.danger:hover { background-color: #a55; }
 
-        #selectedTileDisplay { font-size: 24px; margin-left: 5px; vertical-align: middle; } /* Renamed */
+        #selectedTileDisplay { font-size: 24px; margin-left: 5px; vertical-align: middle; }
         #coordsDisplay { font-size: 0.8em; color: #aaa; margin-top: 5px; text-align: center; }
         #saveStatus { font-size: 0.8em; color: #8f8; height: 1.2em; margin-top: 4px; text-align: center; }
 
@@ -36,15 +43,15 @@
         #clearConfirm button { font-size: 0.8em; padding: 2px 5px; width: auto; margin: 0 3px; }
 
         #palette { flex-grow: 1; overflow-y: auto; }
-        #palette .tile-category { margin-bottom: 10px; border-bottom: 1px dashed #555; padding-bottom: 5px; } /* Renamed */
+        #palette .tile-category { margin-bottom: 10px; border-bottom: 1px dashed #555; padding-bottom: 5px; }
         #palette .tile-category h3 { margin: 0 0 3px 0; font-size: 0.9em; color: #bbb; }
-        #palette span { /* Style for each tile in the palette */
+        #palette span {
             display: inline-block; font-size: 22px; padding: 2px; margin: 1px;
             cursor: pointer; border-radius: 3px; border: 1px solid transparent;
             user-select: none; width: 28px; text-align: center; line-height: 1.2;
         }
         #palette span:hover { background-color: #555; }
-        #palette span.selected-tile { border: 1px solid #ffff00; background-color: rgba(255, 255, 0, 0.2); } /* Renamed */
+        #palette span.selected-tile { border: 1px solid #ffff00; background-color: rgba(255, 255, 0, 0.2); }
 
         #fileInput { display: none; }
     </style>
@@ -55,9 +62,16 @@
             <h2>SimEmoji</h2>
             <div class="button-group">
                  <button id="buildToolBtn" title="Build Tool (B)">🖌️</button>
-                 <button id="bulldozeToolBtn" title="Bulldoze Tool (X)">🚫</button> <!-- Changed Icon -->
-                 <span style="flex-grow: 0;"> | <span id="selectedTileDisplay">❓</span></span> <!-- Renamed -->
+                 <button id="bulldozeToolBtn" title="Bulldoze Tool (X)">🚫</button>
+                 <span style="flex-grow: 0;"> | <span id="selectedTileDisplay">❓</span></span>
             </div>
+             <!-- ADDED Size Selector -->
+             <div class="button-group size-selector">
+                 <button id="size1xBtn" title="1x1 Size">1x1</button>
+                 <button id="size2xBtn" title="2x2 Size">2x2</button>
+                 <button id="size3xBtn" title="3x3 Size">3x3</button>
+             </div>
+             <!-- End Size Selector -->
              <div class="button-group">
                  <button id="undoBtn" title="Undo (Ctrl+Z)">↩️</button>
                  <button id="redoBtn" title="Redo (Ctrl+Y)">↪️</button>
@@ -81,7 +95,6 @@
         </div>
 
         <div id="palette">
-            <!-- Palette content generated by ui.js -->
             <h2>Palette</h2>
         </div>
     </div>
