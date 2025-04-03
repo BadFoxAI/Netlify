@@ -19,93 +19,70 @@ export const zoomInBtn = document.getElementById('zoomInBtn');
 export const zoomOutBtn = document.getElementById('zoomOutBtn');
 export const undoBtn = document.getElementById('undoBtn');
 export const redoBtn = document.getElementById('redoBtn');
-// ADDED Size Buttons
-export const size1xBtn = document.getElementById('size1xBtn');
-export const size2xBtn = document.getElementById('size2xBtn');
-export const size3xBtn = document.getElementById('size3xBtn');
+// Size Slider Elements
+export const sizeSlider = document.getElementById('sizeSlider');
+export const sizeDisplay = document.getElementById('sizeDisplay');
+// Layer Control Elements
+export const layerDownBtn = document.getElementById('layerDownBtn');
+export const layerUpBtn = document.getElementById('layerUpBtn');
+export const layerDisplay = document.getElementById('layerDisplay');
 
 
 let statusTimeout;
 
 // --- UI Update Functions ---
 export function populatePalette() { /* ... Unchanged ... */
-    paletteDiv.innerHTML = '<h2>Palette</h2>'; // Clear old content, keep header
+     paletteDiv.innerHTML = '<h2>Palette</h2>';
     for (const category in config.TILE_CATEGORIES) {
-        const catDiv = document.createElement('div');
-        catDiv.className = 'tile-category'; // Renamed class
-        const title = document.createElement('h3');
-        title.textContent = category;
-        catDiv.appendChild(title);
-
+        const catDiv = document.createElement('div'); catDiv.className = 'tile-category';
+        const title = document.createElement('h3'); title.textContent = category; catDiv.appendChild(title);
         config.TILE_CATEGORIES[category].forEach(tile => {
-            const span = document.createElement('span');
-            span.textContent = tile;
-            span.dataset.tile = tile; // Use data-tile
-            span.title = `Build ${tile}`;
-            span.onclick = () => {
-                selectTile(tile); // Use selectTile function
-                // Optional: Reset size to 1x1 when selecting a new tile?
-                // selectSize(config.DEFAULT_SIZE);
-                setTool('build'); // Switch to build tool when selecting a tile
-            };
-            catDiv.appendChild(span);
-        });
-        paletteDiv.appendChild(catDiv);
+            const span = document.createElement('span'); span.textContent = tile; span.dataset.tile = tile; span.title = `Build ${tile}`;
+            span.onclick = () => { selectTile(tile); setTool('build'); }; catDiv.appendChild(span);
+        }); paletteDiv.appendChild(catDiv);
     }
 }
 
-export function selectTile(tile) {
-    state.setSelectedTile(tile); // Update state
-    selectedTileDisplay.textContent = tile;
+export function selectTile(tile) { /* ... Unchanged ... */
+    state.setSelectedTile(tile); selectedTileDisplay.textContent = tile;
     const spans = paletteDiv.querySelectorAll('span');
-    spans.forEach(span => {
-        span.classList.toggle('selected-tile', span.dataset.tile === tile);
-    });
+    spans.forEach(span => { span.classList.toggle('selected-tile', span.dataset.tile === tile); });
 }
 
-// ADDED Size Selection UI Logic
+// Updated Size Selection UI Logic for Slider
 export function selectSize(size) {
     state.setSelectedSize(size); // Update state
-    updateSizeUI(); // Update button highlights
+    updateSizeUI(); // Update slider and display
 }
 
 export function updateSizeUI() {
-    size1xBtn.classList.toggle('active-size', state.selectedSize === 1);
-    size2xBtn.classList.toggle('active-size', state.selectedSize === 2);
-    size3xBtn.classList.toggle('active-size', state.selectedSize === 3);
+    const size = state.selectedSize;
+    sizeSlider.value = size; // Sync slider position
+    sizeDisplay.textContent = `${size}x${size}`; // Update text display
+    // Remove active-size class logic if it existed for buttons
 }
-// --- End Size Selection UI ---
+
+// Added Layer Selection UI Logic
+export function selectLayer(layer) {
+    state.setSelectedLayer(layer); // Update state (will clamp)
+    updateLayerUI(); // Update display
+}
+
+export function updateLayerUI() {
+    layerDisplay.textContent = state.selectedLayer;
+}
+// --- End Layer Selection UI ---
 
 export function setTool(toolName) { /* ... Unchanged ... */
-    state.setCurrentTool(toolName); // Update state
-    updateToolUI(); // Update button appearance
+    state.setCurrentTool(toolName); updateToolUI();
 }
-
 export function updateToolUI() { /* ... Unchanged ... */
     selectedTileDisplay.style.display = state.currentTool === 'build' ? 'inline' : 'none';
     buildToolBtn.classList.toggle('active-tool', state.currentTool === 'build');
     bulldozeToolBtn.classList.toggle('active-tool', state.currentTool === 'bulldoze');
 }
-
-export function updateCoordsDisplay(gx, gy) { /* ... Unchanged ... */
-    coordsDisplay.textContent = `Grid: ${gx},${gy}`;
-}
-
-export function updateUndoRedoButtons() { /* ... Unchanged ... */
-    undoBtn.disabled = state.undoStack.length === 0;
-    redoBtn.disabled = state.redoStack.length === 0;
-}
-
-export function showStatusMessage(message, isSuccess) { /* ... Unchanged ... */
-    if (statusTimeout) clearTimeout(statusTimeout);
-    saveStatus.textContent = message;
-    saveStatus.style.color = isSuccess ? '#8f8' : '#f88';
-    statusTimeout = setTimeout(() => { saveStatus.textContent = ''; }, 3000);
-}
-
-export function showClearConfirmation() { /* ... Unchanged ... */
-    clearConfirmDiv.style.display = 'block';
-}
-export function hideClearConfirmation() { /* ... Unchanged ... */
-    clearConfirmDiv.style.display = 'none';
-}
+export function updateCoordsDisplay(gx, gy) { /* ... Unchanged ... */ coordsDisplay.textContent = `Grid: ${gx},${gy}`; }
+export function updateUndoRedoButtons() { /* ... Unchanged ... */ undoBtn.disabled = state.undoStack.length === 0; redoBtn.disabled = state.redoStack.length === 0; }
+export function showStatusMessage(message, isSuccess) { /* ... Unchanged ... */ if (statusTimeout) clearTimeout(statusTimeout); saveStatus.textContent = message; saveStatus.style.color = isSuccess ? '#8f8' : '#f88'; statusTimeout = setTimeout(() => { saveStatus.textContent = ''; }, 3000); }
+export function showClearConfirmation() { /* ... Unchanged ... */ clearConfirmDiv.style.display = 'block'; }
+export function hideClearConfirmation() { /* ... Unchanged ... */ clearConfirmDiv.style.display = 'none'; }
